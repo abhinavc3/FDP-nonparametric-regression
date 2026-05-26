@@ -49,10 +49,22 @@ This repository contains code and data used for numerical analysis and simulatio
 
 ## ⚙️ Requirements
 
-- R (≥ 4.0 recommended)  
-- R packages: `wavelets`, `ggplot2`, `data.table`, `foreign`, and others depending on specific scripts.
-
-*(You may need to install additional packages as indicated in individual scripts.)*
+- R (version used for this reproduction environment: `4.4.1`)
+- R packages used in the repository:
+  - `wavethresh` `4.7.3`
+  - `ggplot2` `3.5.1`
+  - `dplyr` `1.1.4`
+  - `tidyr` `1.3.0`
+  - `Metrics` `0.1.4`
+  - `GGally` `2.2.1`
+  - `RColorBrewer` `1.1-3`
+  - `patchwork` `1.2.0`
+  - `gridExtra` `2.3`
+  - `foreign` `0.8-83`
+  - `tidyverse` `2.0.0`
+  - `haven` `2.5.4`
+  - `xtable` `1.8-4`
+  - `reshape2` `1.4.4`
 
 ---
 
@@ -60,8 +72,8 @@ This repository contains code and data used for numerical analysis and simulatio
 
 To reproduce analyses:
 
-1. Navigate to the dataset of interest inside `Data Analysis/` and run the corresponding `.R` scripts.
-2. For simulation studies, go to `Simulations/` and run the scripts under `main article sims/` or `additional sims for supplement/`.
+1. Run the desired script directly from the checked-out repository; the analysis and simulation scripts are written to resolve helper files, inputs, and outputs relative to the script location rather than to a machine-specific working directory.
+2. Use the scripts under `Data Analysis/` for data applications and the scripts under `Simulations/` for the main-paper and supplement experiments.
 
 Example:
 

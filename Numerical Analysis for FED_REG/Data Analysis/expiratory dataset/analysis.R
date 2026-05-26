@@ -1,6 +1,26 @@
-#setwd("/Users/lassev/Dropbox (Penn)/Distributed comm. and privacy constraints/Federated Learning for Nonparametric Regression/Simulations/expiratory/")
-source("../wavelet_helper_functions.r")
-source("../real_data_plot.r")
+#' Determine the directory of the currently running script.
+#'
+#' @return A normalized path to the directory containing the current script, or the current working directory when the script path is unavailable.
+get_script_dir <- function() {
+  cmd_args <- commandArgs(trailingOnly = FALSE)
+  file_arg <- "--file="
+  script_path <- sub(file_arg, "", cmd_args[grep(file_arg, cmd_args)])
+
+  if (length(script_path) > 0) {
+    return(dirname(normalizePath(script_path[1])))
+  }
+
+  if (!is.null(sys.frames()[[1]]$ofile)) {
+    return(dirname(normalizePath(sys.frames()[[1]]$ofile)))
+  }
+
+  normalizePath(getwd())
+}
+
+script_dir <- get_script_dir()
+helpers_dir <- file.path(script_dir, "..", "shared_helpers")
+source(file.path(helpers_dir, "wavelet_helper_functions.r"))
+source(file.path(helpers_dir, "real_data_plot.r"))
 getwd()
 
 # Load necessary libraries
@@ -14,15 +34,15 @@ library(haven)
 set.seed(2024)
 
 # Load the data
-data_fev <- read_xpt("SPX_F.XPT")
-data_demographics <- read_xpt("DEMO_F.XPT")
+data_fev <- read_xpt(file.path(script_dir, "SPX_F.XPT"))
+data_demographics <- read_xpt(file.path(script_dir, "DEMO_F.XPT"))
 # Merge the data using the common identifier 'SEQN'
 merged_data <- inner_join(data_fev, data_demographics, by = "SEQN")
-#colnames(merged_data)
+# colnames(merged_data)
 
 # Extract variables for plotting (adjust variable names as needed)
 age <- merged_data$RIDAGEYR
-fev1 <- merged_data$SPXNFEV1/1000  # Convert to liters
+fev1 <- merged_data$SPXNFEV1 / 1000 # Convert to liters
 gender <- merged_data$RIAGENDR
 
 # Create a data frame for plotting
@@ -45,18 +65,16 @@ nrow(plot_data_female)
 
 
 # Set parameters for wavelet estimation
-grid_size <- 2^15  # Set grid size
-S <- 8  # Set smoothness level for the wavelet
+grid_size <- 2^15 # Set grid size
+S <- 8 # Set smoothness level for the wavelet
 wavelet_types <- c("DaubExPhase", "DaubLeAsymm", "Coiflets", "Symmlets", "Haar")
-wavelet_family <- wavelet_types[1]  
+wavelet_family <- wavelet_types[1]
 boundary <- "interval"
 max_level <- log2(grid_size)
 
 # Wavelet Estimation Preparation
 ppX <- plot_data$age
 ppY <- plot_data$fev1
-
-#plot_padded_curve(ppX, ppY, s=2, eps=c(0.5,1,2), S=5, padding_size_percent = 0.05, grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = FALSE, ylim_range = c(0.5, 5), symbol_spacing = 2^11, x_lab_name = "Age (in years)", y_lab_name = "base-10 log of FEV1 (in liters)")
 
 # Wavelet Estimation Preparation
 ppX1 <- plot_data_female$age
@@ -66,24 +84,24 @@ ppY2 <- plot_data_male$fev1
 length(ppX1)
 length(ppX2)
 
-pdf("female_male_fev1_plot.pdf", width = 8, height = 6)
+pdf(file.path(script_dir, "female_male_fev1_plot.pdf"), width = 8, height = 6)
 plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "female", dataset2_name = "male")
 dev.off()
 
 # INCLUDING SMOKING STATUS
 
 # Load the data
-data_fev <- read_xpt("SPX_F.XPT")
-data_demographics <- read_xpt("DEMO_F.XPT")
-data_smoking <- read_xpt("SMQ_F.XPT")
+data_fev <- read_xpt(file.path(script_dir, "SPX_F.XPT"))
+data_demographics <- read_xpt(file.path(script_dir, "DEMO_F.XPT"))
+data_smoking <- read_xpt(file.path(script_dir, "SMQ_F.XPT"))
 # Merge the data using the common identifier 'SEQN'
 merged_data <- inner_join(data_fev, data_demographics, by = "SEQN")
-merged_data <- inner_join(merged_data, data_smoking, by = "SEQN") 
+merged_data <- inner_join(merged_data, data_smoking, by = "SEQN")
 
 age <- merged_data$RIDAGEYR
-fev1 <- merged_data$SPXNFEV1/1000  # Convert to liters
-gender <- merged_data$RIAGENDR 
-#colnames((data_smoking))
+fev1 <- merged_data$SPXNFEV1 / 1000 # Convert to liters
+gender <- merged_data$RIAGENDR
+# colnames((data_smoking))
 smoker_at_least_100_lifetime <- merged_data$SMQ020
 smoker_now_smoke <- merged_data$SMQ040
 
@@ -104,14 +122,12 @@ plot_data_smoke_lt_nonsmoker_women <- plot_data_smoke_lt_nonsmoker %>% filter(ge
 ppX1 <- plot_data_smoke_lt_smoker_women$age
 ppY1 <- plot_data_smoke_lt_smoker_women$fev1
 length(ppX1)
-#plot_padded_curve(ppX1, ppY1, s=2, eps=c(5,10), S=5, padding_size_percent = 0.05, grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11)
 
 ppX2 <- plot_data_smoke_lt_nonsmoker_women$age
 ppY2 <- plot_data_smoke_lt_nonsmoker_women$fev1
 length(ppX2)
-#plot_padded_curve(ppX2, ppY2, s=2, eps=c(5,10), S=5, padding_size_percent = 0.05, grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11)
 
-pdf("smoking_female_fev1_plot.pdf", width = 8, height = 6)
+pdf(file.path(script_dir, "smoking_female_fev1_plot.pdf"), width = 8, height = 6)
 plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "smoking", dataset2_name = "non-smoking")
 dev.off()
 
@@ -122,7 +138,7 @@ ppY1 <- plot_data_smoke_lt_smoker_men$fev1
 ppX2 <- plot_data_smoke_lt_nonsmoker_men$age
 ppY2 <- plot_data_smoke_lt_nonsmoker_men$fev1
 
-pdf("smoking_male_fev1_plot.pdf", width = 8, height = 6)
+pdf(file.path(script_dir, "smoking_male_fev1_plot.pdf"), width = 8, height = 6)
 plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "smoking", dataset2_name = "non-smoking")
 dev.off()
 
@@ -152,8 +168,8 @@ ppY2 <- plot_data_smoke_now_nonsmoker$fev1
 length(ppX1)
 length(ppX2)
 
-pdf("smoking_nonsmoking_fev1_plot.pdf", width = 8, height = 6)
-plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "some days", ylim_range = c(2,5))
+pdf(file.path(script_dir, "smoking_nonsmoking_fev1_plot.pdf"), width = 8, height = 6)
+plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "some days", ylim_range = c(2, 5))
 dev.off()
 
 
@@ -173,8 +189,8 @@ ppY2 <- plot_data_smoke_now_nonsmoker$fev1
 length(ppX1)
 length(ppX2)
 
-pdf("smoking_fully_nonsmoking_fev1_plot.pdf", width = 8, height = 6)
-plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "never", ylim_range = c(2,5))
+pdf(file.path(script_dir, "smoking_fully_nonsmoking_fev1_plot.pdf"), width = 8, height = 6)
+plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "never", ylim_range = c(2, 5))
 dev.off()
 
 # SEGMENT BY GENDER
@@ -191,8 +207,8 @@ ppY2 <- plot_data_smoke_now_nonsmoker_male$fev1
 length(ppX1)
 length(ppX2)
 
-pdf("smoking_male_fully_nonsmoking_fev1_plot.pdf", width = 8, height = 6)
-plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "never", ylim_range = c(2,5))
+pdf(file.path(script_dir, "smoking_male_fully_nonsmoking_fev1_plot.pdf"), width = 8, height = 6)
+plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "never", ylim_range = c(2, 5))
 dev.off()
 
 
@@ -210,7 +226,6 @@ ppY2 <- plot_data_smoke_now_nonsmoker_male$fev1
 length(ppX1)
 length(ppX2)
 
-pdf("smoking_female_fully_nonsmoking_fev1_plot.pdf", width = 8, height = 6)
-plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "never", ylim_range = c(2,5))
+pdf(file.path(script_dir, "smoking_female_fully_nonsmoking_fev1_plot.pdf"), width = 8, height = 6)
+plot_combined_curves_two_datasets(ppX1, ppY1, ppX2, ppY2, s = 2, epsilons = c(1), S = 5, tau = 6, padding_size_percent = 0.05, x_lab_name = "Age (years)", y_lab_name = "FEV1 (liters)", grid_size = 2^15, wavelet_family = "DaubExPhase", boundary = "interval", include_scatter = TRUE, symbol_spacing = 2^11, dataset1_name = "every day", dataset2_name = "never", ylim_range = c(2, 5))
 dev.off()
-

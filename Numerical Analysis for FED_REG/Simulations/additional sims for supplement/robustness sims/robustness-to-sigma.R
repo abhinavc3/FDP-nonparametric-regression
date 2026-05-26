@@ -1,11 +1,26 @@
 library(wavethresh)
 
+#' Determine the directory of the currently running script.
+#'
+#' @return A normalized path to the directory containing the current script, or the current working directory when the script path is unavailable.
+get_script_dir <- function() {
+  cmd_args <- commandArgs(trailingOnly = FALSE)
+  file_arg <- "--file="
+  script_path <- sub(file_arg, "", cmd_args[grep(file_arg, cmd_args)])
 
-# Set working directory
-setwd("/Users/abhinav/Dropbox (Personal)/Work Stuff/Distributed comm. and privacy constraints/Federated Learning for Nonparametric Regression/Simulations/")
+  if (length(script_path) > 0) {
+    return(dirname(normalizePath(script_path[1])))
+  }
 
-# Include wavelet helper functions
-source("wavelet_helper_functions.r")
+  if (!is.null(sys.frames()[[1]]$ofile)) {
+    return(dirname(normalizePath(sys.frames()[[1]]$ofile)))
+  }
+
+  normalizePath(getwd())
+}
+
+script_dir <- get_script_dir()
+source(file.path(script_dir, "wavelet_helper_functions.r"))
 set.seed(2024)
 
 # Fixed parameters
@@ -23,8 +38,10 @@ boundary <- "interval"
 signal <- 10 * sqrt(grid_size) * besov_smooth_function(grid_size = grid_size, s = s, p = 2, q = 2)
 
 # Fixed wavelet constant
-c_psi <- max(mother_wavelet(level = 0, position = 1, grid_size = grid_size,
-                            family = wavelet_family, bc = boundary, filter_number = S))
+c_psi <- max(mother_wavelet(
+  level = 0, position = 1, grid_size = grid_size,
+  family = wavelet_family, bc = boundary, filter_number = S
+))
 
 # Sim grid
 sigma_grid <- 2^seq(-1, 2, 0.25)
@@ -41,29 +58,31 @@ for (i in seq_along(eps_values)) {
   eps <- eps_values[i]
   pb <- rep(eps, m)
   L_max <- compute_L_max(ns, pb, s)
-  
+
   for (j in seq_along(sigma_grid)) {
     sigma <- sigma_grid[j]
     mse_reps <- numeric(n_reps)
-    
+
     for (r in 1:n_reps) {
       # Generate new data each repetition
       X <- sample(1:grid_size, N, replace = TRUE)
       Y <- signal[X] + rnorm(N)
-      
-      tau <- sqrt(grid_size) * c_psi + sqrt((2*s + 1) * L_max) * sigma
-      
+
+      tau <- sqrt(grid_size) * c_psi + sqrt((2 * s + 1) * L_max) * sigma
+
       # Estimate
-      est <- federated_estimator(ns, pb, s, Y = Y, X = X, grid_size, max_level,
-                                 wavelet_family, boundary, S, tau = tau, c_psi = c_psi)
-      
+      est <- federated_estimator(ns, pb, s,
+        Y = Y, X = X, grid_size, max_level,
+        wavelet_family, boundary, S, tau = tau, c_psi = c_psi
+      )
+
       # Compute MSE
       mse_reps[r] <- mean((est - signal)^2)
     }
-    
+
     # Average over repetitions
     mse_matrix[i, j] <- mean(mse_reps)
-    print(c(i,j))
+    print(c(i, j))
   }
 }
 
@@ -85,8 +104,10 @@ ggplot(df_mse, aes(x = Sigma, y = MSE, color = factor(Epsilon))) +
   geom_line(size = 1.2) +
   geom_point(size = 2) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "black", size = 1) +
-  annotate("text", x = 1, y = max(df_mse$MSE) * 0.9, label = expression("true " * sigma), 
-           angle = 90, vjust = -0.5, hjust = 0, size = 4.5, fontface = "italic") +
+  annotate("text",
+    x = 1, y = max(df_mse$MSE) * 0.9, label = expression("true " * sigma),
+    angle = 90, vjust = -0.5, hjust = 0, size = 4.5, fontface = "italic"
+  ) +
   scale_x_continuous(
     name = expression(sigma),
     trans = "log2"
@@ -100,43 +121,49 @@ ggplot(df_mse, aes(x = Sigma, y = MSE, color = factor(Epsilon))) +
 
 ## our estimator for sigma
 
-estimate_sigma_dyadic <- function(Y, m, eps, r =2) {
+#' Estimate the noise scale from privatized dyadic interval counts.
+#'
+#' @param Y Numeric response vector.
+#' @param m Number of machines or data splits.
+#' @param eps Privacy budget used for the noisy interval proportions.
+#' @param r Base used to define the dyadic-like interval grid.
+#' @return A numeric estimate of the underlying noise scale parameter.
+estimate_sigma_dyadic <- function(Y, m, eps, r = 2) {
   N <- length(Y)
-  stopifnot(N %% m == 0)  # Equal samples per server
-  
+  stopifnot(N %% m == 0) # Equal samples per server
+
   n <- N / m
   j_vals <- -10:10
   intervals <- lapply(j_vals, function(j) c(r^j, r^(j + 1)))
-  
+
   # Split Y into m servers
   server_Ys <- split(Y, rep(1:m, each = n))
-  
+
   # Store noisy proportions for each server and interval
   noisy_props <- matrix(0, nrow = m, ncol = length(j_vals))
-  
+
   for (i in 1:m) {
     Y_i <- server_Ys[[i]]
-    
+
     for (j in seq_along(j_vals)) {
       bounds <- intervals[[j]]
       prop <- mean(Y_i > bounds[1] & Y_i <= bounds[2])
-      
+
       # Add Laplace noise for DP
       noisy_props[i, j] <- prop + rlaplace(1, scale = 1 / (n * eps))
     }
   }
-  
+
   # Average across servers
   avg_noisy_props <- colMeans(noisy_props)
-  
+
   # Select the interval with max average noisy proportion
   j_star_index <- which.max(avg_noisy_props)
   j_star <- j_vals[j_star_index]
-  
+
   # Estimate sigma
-  #sigma_hat <-  r^j_star
   sigma_hat <- 5 * r^j_star
   return(sigma_hat)
 }
 
-estimate_sigma_dyadic(Y, m =1, eps = 2, r = 1.1)
+estimate_sigma_dyadic(Y, m = 1, eps = 2, r = 1.1)

@@ -1,39 +1,61 @@
 # Load necessary libraries
 library(wavethresh)
 
-# Set working directory
-setwd("/home/stat/lassev/PrivateNonparametricRegression")
-#setwd("/Users/lassev/Dropbox (Penn)/Distributed comm. and privacy constraints/Federated Learning for Nonparametric Regression/Simulations/")
+#' Determine the directory of the currently running script.
+#'
+#' @return A normalized path to the directory containing the current script, or the current working directory when the script path is unavailable.
+get_script_dir <- function() {
+  cmd_args <- commandArgs(trailingOnly = FALSE)
+  file_arg <- "--file="
+  script_path <- sub(file_arg, "", cmd_args[grep(file_arg, cmd_args)])
 
-# Include wavelet helper functions
-source("wavelet_helper_functions.r")
+  if (length(script_path) > 0) {
+    return(dirname(normalizePath(script_path[1])))
+  }
+
+  if (!is.null(sys.frames()[[1]]$ofile)) {
+    return(dirname(normalizePath(sys.frames()[[1]]$ofile)))
+  }
+
+  normalizePath(getwd())
+}
+
+script_dir <- get_script_dir()
+source(file.path(script_dir, "wavelet_helper_functions.r"))
 
 # Set seed for reproducibility
 set.seed(2024)
 
 # Simulation parameters
-epsilon_values <- 10^seq(log10(0.1), log10(1000), length.out = 20)  # Epsilon ranging from 0.1 to 1000 on a log scale
+epsilon_values <- 10^seq(log10(0.1), log10(1000), length.out = 20) # Epsilon ranging from 0.1 to 1000 on a log scale
 machine_counts <- c(1, 100, 250, 2000)
-N <- 2000  # Total number of observations
-num_simulations <- 1000  # Reduced number of simulations per configuration for computational feasibility
-t_point <- 0.5  # Point at which to calculate the squared error
+N <- 2000 # Total number of observations
+num_simulations <- 1000 # Reduced number of simulations per configuration for computational feasibility
+t_point <- 0.5 # Point at which to calculate the squared error
 
 # Wavelet and signal parameters
-S <- 4  # Smoothness level of the wavelets
+S <- 4 # Smoothness level of the wavelets
 grid_size <- 2^10
 max_level <- log2(grid_size)
 wavelet_family <- "DaubExPhase"
 boundary <- "interval"
-s <- 2  # Smoothness of the ground truth signal
+s <- 2 # Smoothness of the ground truth signal
 
 # Compute c_psi
-c_psi <- max(mother_wavelet(level = 0, position = 1, grid_size = grid_size, 
-  family = wavelet_family, bc = boundary, filter_number = S))
+c_psi <- max(mother_wavelet(
+  level = 0, position = 1, grid_size = grid_size,
+  family = wavelet_family, bc = boundary, filter_number = S
+))
 
 # x-values for plotting
 x_values <- seq(0, 1, length.out = grid_size)
 
 # Function to calculate index of point t
+#' Locate the grid index closest to a target point.
+#'
+#' @param t_point Target point on the evaluation grid.
+#' @param x_values Numeric vector of grid locations.
+#' @return An integer index of the grid point closest to `t_point`.
 get_index_t <- function(t_point, x_values) {
   which.min(abs(x_values - t_point))
 }
@@ -53,7 +75,7 @@ for (eps in epsilon_values) {
     # Print progress
     cat("  Machine count:", m, "\n")
 
-    ns <- rep(N / m, m)  # Local observations per machine
+    ns <- rep(N / m, m) # Local observations per machine
 
     # Ensure ns are integers
     ns <- floor(ns)
@@ -84,8 +106,10 @@ for (eps in epsilon_values) {
       tau <- sqrt(grid_size) * c_psi + sqrt((2 * s + 1) * L_max)
 
       # Estimate signal
-      estimated_signal <- federated_estimator(ns, pb, s, Y, X, grid_size, max_level, 
-        wavelet_family, boundary, S, tau, c_psi)
+      estimated_signal <- federated_estimator(
+        ns, pb, s, Y, X, grid_size, max_level,
+        wavelet_family, boundary, S, tau, c_psi
+      )
 
       # Calculate MSE over the entire signal
       mse_total <- mean((signal - estimated_signal)^2)
@@ -116,72 +140,81 @@ for (eps in epsilon_values) {
   }
 }
 
-# Convert machine_count to a factor for plotting
-#results_df$machine_count <- factor(results_df$machine_count)
 results_df$machine_count <- factor(results_df$machine_count,
-                                   levels = machine_counts,
-                                   labels = paste0("m = ", machine_counts))
+  levels = machine_counts,
+  labels = paste0("m = ", machine_counts)
+)
 
-save(results_df, file = paste0(N,"N_",num_simulations,"simulation_eps_logscale.RData"))
+results_file <- file.path(script_dir, paste0(N, "N_", num_simulations, "simulation_eps_logscale.RData"))
+save(results_df, file = results_file)
 
 make_plots <- FALSE
-if(make_plots){
-library(ggplot2)
-#quartz()
-load(paste0(num_simulations,"simulation_eps_logscale.RData"))
+if (make_plots) {
+  library(ggplot2)
+  load(results_file)
 
-# Plotting Total Risk vs. Epsilon
-# Define a vector of line types
-line_types <- c("solid", "dashed", "dotted", "dotdash")
+  # Plotting Total Risk vs. Epsilon
+  # Define a vector of line types
+  line_types <- c("solid", "dashed", "dotted", "dotdash")
 
-# Define a vector of custom colors
-colors <- c("red", "blue", "green", "purple")
+  # Define a vector of custom colors
+  colors <- c("red", "blue", "green", "purple")
 
-# Plotting Total Risk vs. Epsilon with enhanced distinguishability and smooth lines
-ggplot(data = results_df, aes(x = epsilon, y = mse_total,
-                              color = machine_count, linetype = machine_count)) +
-  geom_smooth(method = "loess", span = 0.1, se = FALSE, size = 2) +  # Adds a smoothed line
-  scale_x_log10() +
-  scale_y_log10() +
-  scale_color_manual(values = colors) +
-  scale_linetype_manual(values = line_types) +
-  labs(title = "",
-       x = "epsilon",
-       y = expression(Log[10] ~ "IMSE"),
-       color = "Machine Count",
-       linetype = "Machine Count") +
-  theme_minimal() +
-  theme(legend.position = c(1, 1),  # Move the legend to the top-right
-      legend.justification = c("right", "top"),  # Align it to the top-right
-    legend.title = element_blank(),
+  # Plotting Total Risk vs. Epsilon with enhanced distinguishability and smooth lines
+  ggplot(data = results_df, aes(
+    x = epsilon, y = mse_total,
+    color = machine_count, linetype = machine_count
+  )) +
+    geom_smooth(method = "loess", span = 0.1, se = FALSE, size = 2) + # Adds a smoothed line
+    scale_x_log10() +
+    scale_y_log10() +
+    scale_color_manual(values = colors) +
+    scale_linetype_manual(values = line_types) +
+    labs(
+      title = "",
+      x = "epsilon",
+      y = expression(Log[10] ~ "IMSE"),
+      color = "Machine Count",
+      linetype = "Machine Count"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = c(1, 1), # Move the legend to the top-right
+      legend.justification = c("right", "top"), # Align it to the top-right
+      legend.title = element_blank(),
       legend.text = element_text(size = 20),
       axis.title = element_text(size = 22),
-      axis.text = element_text(size = 20))
+      axis.text = element_text(size = 20)
+    )
 
-ggsave("IMSE_eps_asymptotics.pdf", width = 8, height = 6)
+  ggsave(filename = file.path(script_dir, "IMSE_eps_asymptotics.pdf"), width = 8, height = 6)
 
-# Plotting Pointwise Risk vs. Epsilon with enhanced distinguishability and smooth lines
-ggplot(data = results_df, aes(x = epsilon, y = mse_point,
-                              color = machine_count, linetype = machine_count)) +
-  geom_smooth(method = "loess", span = 0.1, se = FALSE, size = 2) +  # Adds a smoothed line
-  scale_x_log10() +
-  scale_y_log10() +
-  scale_color_manual(values = colors) +
-  scale_linetype_manual(values = line_types) +
-  labs(title = "",
-       x = "epsilon",
-       y = expression(Log[10] ~ "Pointwise MSE at t = 0.5"),
-       color = "Machine Count",
-       linetype = "Machine Count") +
-  theme_minimal() +
-  theme(legend.position = c(1, 1),  # Move the legend to the top-right
-      legend.justification = c("right", "top"),  # Align it to the top-right
-    legend.title = element_blank(),
+  # Plotting Pointwise Risk vs. Epsilon with enhanced distinguishability and smooth lines
+  ggplot(data = results_df, aes(
+    x = epsilon, y = mse_point,
+    color = machine_count, linetype = machine_count
+  )) +
+    geom_smooth(method = "loess", span = 0.1, se = FALSE, size = 2) + # Adds a smoothed line
+    scale_x_log10() +
+    scale_y_log10() +
+    scale_color_manual(values = colors) +
+    scale_linetype_manual(values = line_types) +
+    labs(
+      title = "",
+      x = "epsilon",
+      y = expression(Log[10] ~ "Pointwise MSE at t = 0.5"),
+      color = "Machine Count",
+      linetype = "Machine Count"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = c(1, 1), # Move the legend to the top-right
+      legend.justification = c("right", "top"), # Align it to the top-right
+      legend.title = element_blank(),
       legend.text = element_text(size = 20),
       axis.title = element_text(size = 22),
-      axis.text = element_text(size = 20))
+      axis.text = element_text(size = 20)
+    )
 
-ggsave("pointwise_eps_asymptotics.pdf", width = 8, height = 6)
-
-
+  ggsave(filename = file.path(script_dir, "pointwise_eps_asymptotics.pdf"), width = 8, height = 6)
 }
